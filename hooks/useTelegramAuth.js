@@ -1,37 +1,44 @@
 // hooks/useTelegramAuth.js
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { supabase, getUserByTelegramId, createUser } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
 
 export function useTelegramAuth() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [telegramUser, setTelegramUser] = useState(null)
+  const [telegramData, setTelegramData] = useState(null)
   const router = useRouter()
 
   useEffect(() => {
-    initTelegramAuth()
+    checkTelegramAuth()
   }, [])
 
-  const initTelegramAuth = async () => {
+  const checkTelegramAuth = async () => {
     try {
-      // Wait for Telegram Web App to load
+      // Wait for Telegram Web App to initialize
       if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
         const tg = window.Telegram.WebApp
+        
+        // Initialize Telegram Web App
         tg.expand()
         tg.enableClosingConfirmation()
-
+        
+        // Get init data
         const initData = tg.initDataUnsafe
+        console.log('Telegram Init Data:', initData)
+        
         if (initData?.user) {
-          setTelegramUser(initData.user)
-          await handleTelegramLogin(initData.user)
+          setTelegramData(initData)
+          await handleTelegramUser(initData.user)
         } else {
-          // Not in Telegram context, show login page
+          // No user data - not launched from Telegram
+          console.log('Not launched from Telegram Mini App')
           setLoading(false)
         }
       } else {
-        // Not in Telegram context
+        // Telegram Web App not available
+        console.log('Telegram Web App not available')
         setLoading(false)
       }
     } catch (error) {
@@ -40,29 +47,39 @@ export function useTelegramAuth() {
     }
   }
 
-  const handleTelegramLogin = async (tgUser) => {
+  const handleTelegramUser = async (tgUser) => {
     try {
       setLoading(true)
       
-      // Check if user exists
-      const { data: existingUser, error } = await getUserByTelegramId(tgUser.id)
+      // Check if user exists in database
+      const { data: existingUser, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', tgUser.id)
+        .single()
 
       if (error && error.code === 'PGRST116') {
-        // User doesn't exist, create new user
+        // User doesn't exist - create new user
+        console.log('Creating new user...')
         const newUser = await createNewUser(tgUser)
         setUser(newUser)
-        toast.success('Account created successfully!')
+        toast.success('Welcome! Account created successfully.')
       } else if (existingUser) {
-        // User exists
+        // User exists - check if blocked
         if (existingUser.is_blocked) {
-          toast.error('Your account has been blocked')
+          toast.error('Your account has been blocked. Contact support.')
+          setLoading(false)
           return
         }
+        console.log('User exists:', existingUser)
         setUser(existingUser)
+        toast.success(`Welcome back, ${existingUser.first_name}!`)
+      } else if (error) {
+        throw error
       }
     } catch (error) {
-      console.error('Login error:', error)
-      toast.error('Login failed. Please try again.')
+      console.error('User handling error:', error)
+      toast.error('Authentication failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -75,15 +92,22 @@ export function useTelegramAuth() {
       telegram_id: tgUser.id,
       username: tgUser.username,
       first_name: tgUser.first_name,
-      last_name: tgUser.last_name,
+      last_name: tgUser.last_name || '',
       photo_url: tgUser.photo_url,
       refer_code: referCode,
       is_admin: tgUser.username === process.env.NEXT_PUBLIC_ADMIN_USERNAME
     }
 
-    const { data: newUser, error } = await createUser(userData)
-    
+    console.log('Creating user with data:', userData)
+
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert([userData])
+      .select()
+      .single()
+
     if (error) {
+      console.error('Supabase error:', error)
       throw new Error(`User creation failed: ${error.message}`)
     }
 
@@ -101,7 +125,6 @@ export function useTelegramAuth() {
 
   const logout = () => {
     setUser(null)
-    setTelegramUser(null)
     if (window.Telegram?.WebApp) {
       window.Telegram.WebApp.close()
     }
@@ -109,17 +132,21 @@ export function useTelegramAuth() {
 
   const refreshUser = async () => {
     if (user) {
-      const { data: updatedUser } = await getUserByTelegramId(user.telegram_id)
+      const { data: updatedUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', user.telegram_id)
+        .single()
       setUser(updatedUser)
     }
   }
 
   return {
     user,
-    telegramUser,
+    telegramData,
     loading,
     logout,
     refreshUser,
     isAuthenticated: !!user
   }
-      }
+                    }
