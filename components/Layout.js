@@ -4,21 +4,10 @@ import Head from 'next/head'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import Loading from './Loading'
-import Notifications from './Notifications'
+import DebugInfo from './DebugInfo'
 
 export default function Layout({ children, user, loading, title = "Dashboard" }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [notifications, setNotifications] = useState([])
-
-  useEffect(() => {
-    if (user) {
-      fetchNotifications()
-    }
-  }, [user])
-
-  const fetchNotifications = async () => {
-    // Implementation for fetching notifications
-  }
 
   if (loading) {
     return <Loading />
@@ -41,7 +30,6 @@ export default function Layout({ children, user, loading, title = "Dashboard" })
         <Header 
           setSidebarOpen={setSidebarOpen} 
           user={user} 
-          notifications={notifications}
         />
         
         <main className="flex-1 pb-8">
@@ -51,7 +39,8 @@ export default function Layout({ children, user, loading, title = "Dashboard" })
         </main>
       </div>
 
-      <Notifications notifications={notifications} />
+      {/* Debug info for testing */}
+      <DebugInfo />
     </div>
   )
 }
