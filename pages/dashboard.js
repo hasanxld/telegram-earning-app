@@ -11,11 +11,4 @@
       <p className="text-2xl font-bold text-gray-900">৳{user.balance}</p>
     </div>
   </div>
-</div>    <p className="text-gray-500 text-center py-4">No user data available</p>
-            )}
-          </div>
-        </div>
-      </div>
-    </Layout>
-  )
-}
+</div>
